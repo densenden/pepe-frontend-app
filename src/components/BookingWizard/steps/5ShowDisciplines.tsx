@@ -1,4 +1,4 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { BookingData } from '../types';
 import {
   Accordion,
@@ -25,6 +25,25 @@ const DISCIPLINE_OPTIONS: { value: string; img: string; labelKey: string; descKe
   { value: 'Pantomime', img: 'Pantomime', labelKey: 'booking.disciplines.options.pantomimeEntertainment.label', descKey: 'booking.disciplines.options.pantomimeEntertainment.description' }
 ];
 
+const BACKEND_TO_OPTION_VALUE: Record<string, string> = {
+  'zauberer': 'Zauberer',
+  'cyr-wheel': 'Cyr-Wheel',
+  'bodenakrobatik': 'Bodenakrobatik',
+  'luftakrobatik': 'Luftakrobatik',
+  'partnerakrobatik': 'Partnerakrobatik',
+  'chinese pole': 'Chinese Pole',
+  'hula hoop': 'Hula Hoop',
+  'hula': 'Hula Hoop',
+  'handstand': 'Handstand',
+  'contemporary dance': 'Contemporary Dance',
+  'contemporary': 'Contemporary Dance',
+  'breakdance': 'Breakdance',
+  'teeterboard': 'Teeterboard',
+  'jonglage': 'Jonglage',
+  'moderation': 'Moderation',
+  'pantomime': 'Pantomime'
+};
+
 export interface StepDisciplinesProps {
   data: BookingData;
   onChange: (update: Partial<BookingData>) => void;
@@ -40,13 +59,88 @@ const StepShowDisciplines: React.FC<StepDisciplinesProps> = ({
 }) => {
   const { t } = useTranslation();
 
+  const [allowedOptionValues, setAllowedOptionValues] = useState<string[] | null>(null);
+  const [loadingAllowed, setLoadingAllowed] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const didAutoAdvance = useRef(false);
+  const didSanitize = useRef(false);
+
+  useEffect(() => {
+    let active = true;
+    const stored = (() => { try { return localStorage.getItem('bookingTargetArtistId'); } catch { return null; } })();
+    if (!stored) { setAllowedOptionValues(null); return; }
+    const artistId = Number(stored);
+    if (!artistId || Number.isNaN(artistId)) { setAllowedOptionValues(null); return; }
+
+    const baseUrl = (import.meta as any).env?.VITE_API_URL || '';
+    if (!baseUrl) { setAllowedOptionValues(null); return; }
+
+    (async () => {
+      try {
+        setLoadingAllowed(true);
+        setLoadError(null);
+        const res = await fetch(`${baseUrl}/api/artists/${artistId}`);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const a = await res.json();
+        const backendDiscs: string[] = Array.isArray(a?.disciplines) ? a.disciplines : [];
+        const normalized = backendDiscs.map((d) => String(d || '').trim().toLowerCase());
+        const mappedValues = normalized.map((k) => BACKEND_TO_OPTION_VALUE[k]).filter(Boolean);
+        if (!active) return;
+        setAllowedOptionValues(mappedValues.length ? Array.from(new Set(mappedValues)) : []);
+
+        // Sanitize any previous selections to only allowed values (prevents leakage from prior sessions)
+        const allowedSet = new Set(mappedValues);
+        const current = Array.isArray(data.disciplines) ? data.disciplines : [];
+        const sanitized = current.filter(v => allowedSet.has(v));
+
+        if (!didSanitize.current) {
+          didSanitize.current = true;
+          if (mappedValues.length === 1) {
+            // Force the single allowed discipline and auto-advance
+            const only = mappedValues[0];
+            if (sanitized.length !== 1 || sanitized[0] !== only) {
+              onChange({ disciplines: [only] });
+            }
+            if (!didAutoAdvance.current) {
+              didAutoAdvance.current = true;
+              setTimeout(() => { try { onNext(); } catch {} }, 0);
+            }
+          } else {
+            // Multiple allowed: prune disallowed selections once
+            if (sanitized.length !== current.length) {
+              onChange({ disciplines: sanitized });
+            }
+          }
+        }
+      } catch (e: any) {
+        if (!active) return;
+        setLoadError(e?.message || 'Failed to load artist disciplines');
+        setAllowedOptionValues(null);
+      } finally {
+        if (active) setLoadingAllowed(false);
+      }
+    })();
+
+    return () => { active = false; };
+  }, [data.disciplines, onChange]);
+
+  const optionsToRender = useMemo(() => {
+    if (allowedOptionValues === null) return DISCIPLINE_OPTIONS; // no targeting
+    const allowedSet = new Set(allowedOptionValues);
+    return DISCIPLINE_OPTIONS.filter(opt => allowedSet.has(opt.value));
+  }, [allowedOptionValues]);
+
   const toggleDiscipline = useCallback((value: string) => {
+    if (allowedOptionValues !== null) {
+      const allowedSet = new Set(allowedOptionValues);
+      if (!allowedSet.has(value)) return;
+    }
     const selected = data.disciplines.includes(value);
     const newList = selected
       ? data.disciplines.filter(d => d !== value)
       : [...data.disciplines, value];
     onChange({ disciplines: newList });
-  }, [data.disciplines, onChange]);
+  }, [data.disciplines, onChange, allowedOptionValues]);
 
   return (
     <div className="step flex flex-col items-center pb-28">
@@ -54,8 +148,13 @@ const StepShowDisciplines: React.FC<StepDisciplinesProps> = ({
       <p className="text-sm text-white-200 text-center mb-2">{t('booking.disciplines.multi')}</p>
       
       <div className="w-full px-4">
+        {allowedOptionValues !== null && (
+          <p className="text-xs text-white/70 mb-2 text-center">
+            Du fragst einen bestimmten Künstler an – wähle eine seiner angebotenen Disziplinen.
+          </p>
+        )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-7xl mx-auto justify-items-center">
-          {DISCIPLINE_OPTIONS.map((opt) => {
+          {optionsToRender.map((opt) => {
             const label = t(opt.labelKey);
             const desc = t(opt.descKey);
             const isSelected = data.disciplines.includes(opt.value);
@@ -120,7 +219,12 @@ const StepShowDisciplines: React.FC<StepDisciplinesProps> = ({
         <button
           type="button"
           onClick={onNext}
-          disabled={data.disciplines.length === 0}
+          disabled={(() => {
+            if ((data.disciplines || []).length === 0) return true;
+            if (allowedOptionValues === null) return false;
+            const allowedSet = new Set(allowedOptionValues);
+            return !data.disciplines.some(d => allowedSet.has(d));
+          })()}
           className={`bg-blue-600 text-white font-semibold py-3 px-8 rounded-full shadow-lg transition-opacity ${data.disciplines.length === 0 ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'}`}
           aria-label={t('booking.disciplines.next')}
         >

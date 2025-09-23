@@ -38,11 +38,11 @@ const ArtistCardFront: React.FC<ArtistCardFrontProps> = ({ artist, onFlip }) => 
       </div>
 
       {/* Inhalt */}
-      <div className="p-6 flex flex-col justify-between gap-3 flex-1">
+      <div className="p-6 pb-7 flex flex-col justify-between gap-3 flex-1 min-h-56 md:min-h-64">
         <h2 className="text-xl font-semibold mb-2 text-white">{firstName}</h2>
 
         {quote && (
-          <p className="italic text-gray-400 mb-2 line-clamp-2">„{quote}“</p>
+          <p className="italic text-gray-400 mb-2 line-clamp-4 md:line-clamp-6">„{quote}“</p>
         )}
 
         {/* Disziplinen als Badges */}
@@ -61,6 +61,15 @@ const ArtistCardFront: React.FC<ArtistCardFrontProps> = ({ artist, onFlip }) => 
             )}
           </div>
         )}
+        <div className="mt-4 mb-2 shrink-0">
+          <a
+            href={`/anfragen?skipIntro=1&artistId=${artist.id}`}
+            className="inline-flex items-center justify-center rounded-full px-4 py-2 border border-white/20 text-sm text-white bg-white/10 hover:bg-white/20 transition-colors focus:outline-none focus:ring-2 focus:ring-white/40 w-full text-center"
+            aria-label={`Jetzt ${artist.name} anfragen`}
+          >
+            Jetzt anfragen
+          </a>
+        </div>
       </div>
     </div>
   );

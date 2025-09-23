@@ -62,6 +62,23 @@ const DISCIPLINE_VIDEO_MAP: Record<string, string> = {
   "pole": "Chienise Pole.webm"
 };
 
+const UI_TO_BACKEND_DISC: Record<string, string> = {
+  'Zauberer': 'zauberer',
+  'Cyr-Wheel': 'cyr-wheel',
+  'Bodenakrobatik': 'bodenakrobatik',
+  'Luftakrobatik': 'luftakrobatik',
+  'Partnerakrobatik': 'partnerakrobatik',
+  'Chinese Pole': 'chinese pole',
+  'Hula Hoop': 'hula hoop',
+  'Handstand': 'handstand',
+  'Contemporary Dance': 'contemporary dance',
+  'Breakdance': 'breakdance',
+  'Teeterboard': 'teeterboard',
+  'Jonglage': 'jonglage',
+  'Moderation': 'moderation',
+  'Pantomime': 'pantomime'
+};
+
 export interface StepShowtimeProps {
   data: BookingData;
   onPrev: () => void;
@@ -129,7 +146,30 @@ const StepShowtime: React.FC<StepShowtimeProps> = ({ data, onPrev }) => {
         });
       } catch {}
 
-      const res = await postRequest(data);
+      // Build payload with minimal, backwards-compatible additions
+      const payload: any = { ...(data as any) };
+      // If wizard was started from a specific artist, include target_artist_ids
+      try {
+        const stored = localStorage.getItem('bookingTargetArtistId');
+        const artistId = stored ? Number(stored) : 0;
+        if (artistId) {
+          payload.target_artist_ids = [artistId];
+          // If team_size not explicitly chosen yet, default to solo when targeting a specific artist
+          const ts = Number((payload as any).team_size || 0);
+          if (!ts || ts < 1) {
+            (payload as any).team_size = 1;
+          }
+        }
+      } catch {}
+      // If user selected any discipline in the wizard, map UI label to backend key
+      try {
+        const first = Array.isArray((data as any)?.disciplines) ? (data as any).disciplines[0] : null;
+        if (first) {
+          payload.show_discipline = UI_TO_BACKEND_DISC[String(first)] || String(first).toLowerCase();
+        }
+      } catch {}
+
+      const res = await postRequest(payload);
 
       try {
         posthog.capture('booking_request_succeeded', {

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef } from 'react';
 import type { BookingData } from '../types';
 import OptionCard from '../parts/OptionCard';
 import { useTranslation } from "react-i18next";
@@ -17,6 +17,23 @@ const StepArtistCount: React.FC<StepArtistCountProps> = ({
   onPrev
 }) => {
   const { t } = useTranslation();
+
+  const didAutoSkip = useRef(false);
+  useEffect(() => {
+    if (didAutoSkip.current) return;
+    didAutoSkip.current = true;
+    try {
+      const stored = localStorage.getItem('bookingTargetArtistId');
+      const artistId = stored ? Number(stored) : 0;
+      if (artistId) {
+        // default to solo and skip this step
+        if (Number(data.team_size || 0) !== 1) {
+          onChange({ team_size: 1 });
+        }
+        onNext();
+      }
+    } catch {}
+  }, []);
 
   const options: { labelKey: string; value: number; img: string }[] = [
     { labelKey: 'booking.artistCount.options.solo', value: 1, img: 'Solo' },

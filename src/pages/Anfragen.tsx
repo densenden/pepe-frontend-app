@@ -71,6 +71,7 @@ export default function Anfragen() {
       setData(initialData);
       try { localStorage.removeItem('bookingStep'); } catch {}
       try { localStorage.removeItem('bookingData'); } catch {}
+      try { localStorage.removeItem('bookingTargetArtistId'); } catch {}
       // scroll window to top (or parent scroller if needed)
       try {
         const scroller = document.querySelector('main');
@@ -97,6 +98,7 @@ export default function Anfragen() {
       try { localStorage.removeItem('bookingCompleted'); } catch {}
       try { localStorage.removeItem('bookingStep'); } catch {}
       try { localStorage.removeItem('bookingData'); } catch {}
+      try { localStorage.removeItem('bookingTargetArtistId'); } catch {}
       setData(initialData);
       setStepIndex(0);
     }
@@ -108,6 +110,10 @@ export default function Anfragen() {
       const params = new URLSearchParams(window.location.search);
       const stepParam = params.get('step');
       const skipIntro = params.get('skipIntro');
+      const artistId = params.get('artistId');
+      if (artistId) {
+        try { localStorage.setItem('bookingTargetArtistId', String(Number(artistId))); } catch {}
+      }
 
       if (stepParam) {
         const s = Math.max(1, Math.min(steps.length, Number(stepParam) || 1));

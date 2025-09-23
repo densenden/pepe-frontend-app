@@ -4,6 +4,7 @@
 // ---------------------------------------------------------------
 
 export interface Artist {
+  id?: number;
   /** Full display name */
   name: string;
   /** Primary/cover image URL shown on the front */
